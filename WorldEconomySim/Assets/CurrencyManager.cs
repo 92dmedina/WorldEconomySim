@@ -1,6 +1,6 @@
 using UnityEngine;
 using TMPro;
-using UnityEngine.UI; // Required for the Slider
+using UnityEngine.UI;
 
 public class CurrencyManager : MonoBehaviour
 {
@@ -13,15 +13,17 @@ public class CurrencyManager : MonoBehaviour
     public double marketTrend = 0.0;
 
     [Header("Day Cycle Settings")]
-    public float dayDuration = 60f; 
+    public float dayDuration = 180f; 
     private float currentTimeInDay = 0f;
     private float scheduledEventTime;
     private int currentDay = 1;
     private bool eventFiredToday = false;
+    private bool marketOpen = true;
 
     [Header("Dynamic Trading")]
     public Slider buySlider;
     public Slider sellSlider;
+    public GameObject startDayButton;
 
     [Header("UI Text Elements")]
     public TextMeshProUGUI usdText;
@@ -29,113 +31,142 @@ public class CurrencyManager : MonoBehaviour
     public TextMeshProUGUI rateText;
     public TextMeshProUGUI dayText;
     public TextMeshProUGUI newsText;
+    public TextMeshProUGUI clockText;
     public TextMeshProUGUI buyPercentageText;
     public TextMeshProUGUI sellPercentageText;
 
-    // --- Unity Functions ---
-
     void Start()
     {
-        // Initialize balances
         usdBalance = 100.0;
         jpyBalance = 0.0;
+        
+        // Hide the Start Day button since we start in progress
+        if (startDayButton != null) startDayButton.SetActive(false);
 
-        // The PULSE: Creates constant market vibration every 0.5s
         InvokeRepeating("UpdateMarketPulse", 0.5f, 0.5f);
-
         StartNewDay();
     }
 
     void Update()
     {
-        // 1. Advance the clock for the Day Cycle
-        currentTimeInDay += Time.deltaTime;
-
-        // 2. Check if it's time for the daily news event
-        if (!eventFiredToday && currentTimeInDay >= scheduledEventTime)
-        {
-            TriggerEconomyEvent();
-            eventFiredToday = true; 
-        }
-
-        // 3. Check if the day is over
-        if (currentTimeInDay >= dayDuration)
-        {
-            currentDay++;
-            StartNewDay();
-        }
-
-        // 4. Update the Slider percentage text
+        // This allows the percentages to update even when the market is closed
         if (buyPercentageText != null && buySlider != null)
-        {
-            // We divide the slider value by its own Max Value (2) to get the fraction
-            float fraction = buySlider.value / buySlider.maxValue; 
-            float percent = fraction * 100f;
-        
-            buyPercentageText.text = percent.ToString("F0") + "%";
-        }
+            buyPercentageText.text = (buySlider.value / buySlider.maxValue * 100f).ToString("F0") + "%";
 
         if (sellPercentageText != null && sellSlider != null)
-        {
-            float fraction = sellSlider.value / sellSlider.maxValue; 
-            float percent = fraction * 100f;
-        
-            sellPercentageText.text = percent.ToString("F0") + "%";
-        }
-        
-    }
+            sellPercentageText.text = (sellSlider.value / sellSlider.maxValue * 100f).ToString("F0") + "%";
 
-    // --- Internal Logic (The Brain) ---
+
+        // Everything BELOW this line will only happen if the market is open
+        if (!marketOpen) return;
+
+
+        // CLOCK & GAME LOGIC
+        currentTimeInDay += Time.deltaTime;
+
+        // Clock Display Logic (9 AM - 5 PM)
+        if (clockText != null)
+        {
+            float dayPercentage = currentTimeInDay / dayDuration;
+            float currentHourDecimal = 9.0f + (dayPercentage * 8.0f);
+            int hours = Mathf.FloorToInt(currentHourDecimal);
+            int minutes = Mathf.FloorToInt((currentHourDecimal - hours) * 60);
+            string period = (hours >= 12) ? "PM" : "AM";
+            int displayHour = (hours > 12) ? hours - 12 : hours;
+            clockText.text = $"{displayHour:D2}:{minutes:D2} {period}";
+        }
+
+        // Daily News Trigger
+        if (!eventFiredToday && currentTimeInDay >= scheduledEventTime)
+        {
+        TriggerEconomyEvent();
+        eventFiredToday = true; 
+        }
+
+        // End of Day Check
+        if (currentTimeInDay >= dayDuration)
+        {
+            EndTradingDay();
+        }
+    }
 
     void StartNewDay()
     {
         currentTimeInDay = 0f;
         eventFiredToday = false;
-
-        // Pick a random time for news to hit (between 5s and 55s)
+        marketOpen = true;
+        // DECAY SYSTEM: Reduce the trend by 50% overnight
+        marketTrend *= 0.5;
+        if (newsText != null) 
+        {
+        // If there's still a significant trend carrying over
+            if (marketTrend >= 0.005) newsText.text = "USD showing overnight strength.";
+            else if (marketTrend <= -0.005) newsText.text = "JPY carrying momentum from yesterday.";
+            else newsText.text = "Markets open with no significant news.";
+        }
         scheduledEventTime = Random.Range(5f, dayDuration - 5f);
 
-        Debug.Log($"DAY {currentDay} STARTED.");
-        Debug.Log($"News at: {scheduledEventTime:F1}s");
+        if (startDayButton != null) startDayButton.SetActive(false);
+        Debug.Log($"Today's news will trigger at: {scheduledEventTime:F1}s");
         UpdateTextDisplays();
+    }
+
+    void EndTradingDay()
+    {
+        marketOpen = false;
+        if (startDayButton != null) startDayButton.SetActive(true);
+    }
+
+    public void OnStartNextDayClicked()
+    {
+        currentDay++;
+        StartNewDay();
     }
 
     void UpdateMarketPulse()
     {
-        // Add tiny random vibration + current trend direction
-        double noise = Random.Range(-0.03f, 0.03f); 
+        // Don't wiggle the numbers if the market is closed!
+        if (!marketOpen) return;
+
+        double noise = Random.Range(-0.01f, 0.01f); 
         jpyExchangeRate += marketTrend + noise;
-
-        // Keep a realistic floor (Yen shouldn't be free!)
-        if (jpyExchangeRate < 100.0) jpyExchangeRate = 100.0;
-
+        if (jpyExchangeRate < 75.0) jpyExchangeRate = 75.0;
         UpdateTextDisplays();
     }
 
     void TriggerEconomyEvent()
     {
-        int eventRoll = Random.Range(1, 4);
-        string message = "";
+        // Increased range to allow for more variety in news intensity
+        int eventRoll = Random.Range(1, 7); 
 
-        if (eventRoll == 1) // US BOOM
+        if (eventRoll == 1)
         {
-            marketTrend = 0.1;
-            message = "US Tech Sector reports record profits. USD strengthening.";
+            marketTrend = 0.025; 
+            newsText.text = "US Federal Reserve hints at rate hikes. USD climbing.";
         }
-        else if (eventRoll == 2) // JAPAN BOOM
+        else if (eventRoll == 2)
         {
-            marketTrend = -0.1;
-            message = "Japan manufacturing surge beats estimates. JPY strengthening.";
+            marketTrend = 0.01;
+            newsText.text = "Consumer spending rises in the US. USD seeing steady gains.";
         }
-        else // STAGNATION
+        else if (eventRoll == 3)
+        {
+            marketTrend = -0.025;
+            newsText.text = "Japan's tech exports hit record highs. JPY strengthening.";
+        }
+        else if (eventRoll == 4)
+        {
+            marketTrend = -0.01;
+            newsText.text = "Tourism surge boosts local Japanese economy. JPY up slightly.";
+        }
+        else
         {
             marketTrend = 0.0;
-            message = "Global markets remain steady. No major news today.";
-        }
-
-        if (newsText != null) newsText.text = message;
-        Debug.Log("EVENT: " + message);
+            newsText.text = "Global markets remain steady. No major news today.";
     }
+
+    Debug.Log($"EVENT TRIGGERED: {newsText.text} (Trend: {marketTrend})");
+}
 
     void UpdateTextDisplays()
     {
@@ -151,8 +182,8 @@ public class CurrencyManager : MonoBehaviour
 
     public void BuyDynamicJPY()
     {
-        // Instead of multiplying by the raw value (0-2), 
-        // we multiply by the fraction (0-1)
+        // Instead of multiplying by the raw value, 
+        // we multiply by the fraction
         double fraction = (double)buySlider.value / (double)buySlider.maxValue;
         double usdToSpend = usdBalance * fraction;
 
@@ -170,8 +201,8 @@ public class CurrencyManager : MonoBehaviour
 
     public void SellDynamicJPY()
     {
-        // Instead of multiplying by the raw value (0-2), 
-        // we multiply by the fraction (0-1)
+        // Instead of multiplying by the raw value, 
+        // we multiply by the fraction
         double fraction = (double)sellSlider.value / (double)sellSlider.maxValue;
         double jpyToSpend = jpyBalance * fraction;
 
