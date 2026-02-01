@@ -1,9 +1,15 @@
-using UnityEngine;
+using System;
 using TMPro;
+using UnityEngine;
 using UnityEngine.UI;
 
 public class CurrencyManager : MonoBehaviour
 {
+    [Header("Screen Navigation")]
+    public GameObject mapHubPanel;
+    public GameObject japanTradingPanel;
+    public GameObject portfolioPanel;
+
     [Header("Currency Values")]
     public double usdBalance = 100.0;
     public double jpyBalance = 0.0;
@@ -13,12 +19,12 @@ public class CurrencyManager : MonoBehaviour
     public double marketTrend = 0.0;
 
     [Header("Day Cycle Settings")]
-    public float dayDuration = 180f; 
+    public float dayDuration = 180f;
     private float currentTimeInDay = 0f;
     private float scheduledEventTime;
-    private int currentDay = 1;
+    private int currentDay = 0;
     private bool eventFiredToday = false;
-    private bool marketOpen = true;
+    private bool marketOpen = false;
 
     [Header("Dynamic Trading")]
     public Slider buySlider;
@@ -34,17 +40,12 @@ public class CurrencyManager : MonoBehaviour
     public TextMeshProUGUI clockText;
     public TextMeshProUGUI buyPercentageText;
     public TextMeshProUGUI sellPercentageText;
+    public TextMeshProUGUI totalNetWorthText;
 
     void Start()
     {
-        usdBalance = 100.0;
-        jpyBalance = 0.0;
-        
-        // Hide the Start Day button since we start in progress
-        if (startDayButton != null) startDayButton.SetActive(false);
-
-        InvokeRepeating("UpdateMarketPulse", 0.5f, 0.5f);
-        StartNewDay();
+        ShowMapHub();
+        InvokeRepeating(nameof(UpdateMarketPulse), 0.5f, 0.5f);
     }
 
     void Update()
@@ -57,33 +58,22 @@ public class CurrencyManager : MonoBehaviour
             sellPercentageText.text = (sellSlider.value / sellSlider.maxValue * 100f).ToString("F0") + "%";
 
 
-        // Everything BELOW this line will only happen if the market is open
+        // If the market isn't open, we stop here.
         if (!marketOpen) return;
 
-
-        // CLOCK & GAME LOGIC
+        // Track the time
         currentTimeInDay += Time.deltaTime;
 
-        // Clock Display Logic (9 AM - 5 PM)
-        if (clockText != null)
-        {
-            float dayPercentage = currentTimeInDay / dayDuration;
-            float currentHourDecimal = 9.0f + (dayPercentage * 8.0f);
-            int hours = Mathf.FloorToInt(currentHourDecimal);
-            int minutes = Mathf.FloorToInt((currentHourDecimal - hours) * 60);
-            string period = (hours >= 12) ? "PM" : "AM";
-            int displayHour = (hours > 12) ? hours - 12 : hours;
-            clockText.text = $"{displayHour:D2}:{minutes:D2} {period}";
-        }
+        UpdateClockMath();
 
-        // Daily News Trigger
+        //  Daily News Trigger
         if (!eventFiredToday && currentTimeInDay >= scheduledEventTime)
         {
-        TriggerEconomyEvent();
-        eventFiredToday = true; 
+            TriggerEconomyEvent();
+            eventFiredToday = true;
         }
 
-        // End of Day Check
+        // 5. End of Day Check
         if (currentTimeInDay >= dayDuration)
         {
             EndTradingDay();
@@ -97,30 +87,46 @@ public class CurrencyManager : MonoBehaviour
         marketOpen = true;
         // DECAY SYSTEM: Reduce the trend by 50% overnight
         marketTrend *= 0.5;
-        if (newsText != null) 
+        if (newsText != null)
         {
-        // If there's still a significant trend carrying over
+            // If there's still a significant trend carrying over
             if (marketTrend >= 0.005) newsText.text = "USD showing overnight strength.";
             else if (marketTrend <= -0.005) newsText.text = "JPY carrying momentum from yesterday.";
             else newsText.text = "Markets open with no significant news.";
         }
-        scheduledEventTime = Random.Range(5f, dayDuration - 5f);
+        scheduledEventTime = UnityEngine.Random.Range(5f, dayDuration - 5f);
+        currentDay++;
+        dayText.text = $"Day: {currentDay}";
 
         if (startDayButton != null) startDayButton.SetActive(false);
         Debug.Log($"Today's news will trigger at: {scheduledEventTime:F1}s");
-        UpdateTextDisplays();
     }
 
     void EndTradingDay()
     {
-        marketOpen = false;
+        SetClockText(5, 0, "PM");
+        marketOpen = false; // Stop the market
+
+        // Calculate Interest and log result
+        CalculateDailyInterest();
+
         if (startDayButton != null) startDayButton.SetActive(true);
     }
 
     public void OnStartNextDayClicked()
     {
-        currentDay++;
         StartNewDay();
+    }
+
+    void CalculateDailyInterest()
+    {
+        // Calculate interest
+        double interestRate = 0.001; // 0.1%
+        double interestEarned = usdBalance * interestRate;
+
+        usdBalance += interestEarned;
+        UpdateBalanceDisplays();
+        UpdateStatusDisplay($"Market Closed. You earned ${interestEarned:F2} in bank interest.");
     }
 
     void UpdateMarketPulse()
@@ -128,20 +134,33 @@ public class CurrencyManager : MonoBehaviour
         // Don't wiggle the numbers if the market is closed!
         if (!marketOpen) return;
 
-        double noise = Random.Range(-0.01f, 0.01f); 
+        double noise = UnityEngine.Random.Range(-0.01f, 0.01f);
         jpyExchangeRate += marketTrend + noise;
         if (jpyExchangeRate < 75.0) jpyExchangeRate = 75.0;
-        UpdateTextDisplays();
+        UpdateExchangeRate();
+    }
+
+    void UpdateClockMath()
+    {
+        float dayPercentage = currentTimeInDay / dayDuration;
+        float currentHourDecimal = 9.0f + (dayPercentage * 8.0f);
+
+        int hours = Mathf.FloorToInt(currentHourDecimal);
+        int minutes = Mathf.FloorToInt((currentHourDecimal - hours) * 60);
+
+        string period = (hours >= 12) ? "PM" : "AM";
+        int displayHour = (hours > 12) ? hours - 12 : hours;
+
+        SetClockText(displayHour, minutes, period);
     }
 
     void TriggerEconomyEvent()
     {
-        // Increased range to allow for more variety in news intensity
-        int eventRoll = Random.Range(1, 7); 
+        int eventRoll = UnityEngine.Random.Range(1, 7);
 
         if (eventRoll == 1)
         {
-            marketTrend = 0.025; 
+            marketTrend = 0.025;
             newsText.text = "US Federal Reserve hints at rate hikes. USD climbing.";
         }
         else if (eventRoll == 2)
@@ -163,19 +182,94 @@ public class CurrencyManager : MonoBehaviour
         {
             marketTrend = 0.0;
             newsText.text = "Global markets remain steady. No major news today.";
+        }
+
+        Debug.Log($"EVENT TRIGGERED: {newsText.text} (Trend: {marketTrend})");
     }
 
-    Debug.Log($"EVENT TRIGGERED: {newsText.text} (Trend: {marketTrend})");
-}
-
-    void UpdateTextDisplays()
+    void UpdateNetWorthDisplay()
     {
-        // Using prefixes so the labels always stay visible
+        if (totalNetWorthText == null) return;
+
+        // Start with base USD cash
+        double totalInUsd = usdBalance;
+
+        // Convert JPY holding to USD and add to total
+        double jpyValueInUsd = jpyBalance / jpyExchangeRate;
+        totalInUsd += jpyValueInUsd;
+
+        totalNetWorthText.text = $"Total Net Worth: ${totalInUsd:F2} (USD)";
+    }
+
+    void UpdateBalanceDisplays()
+    {
         usdText.text = $"USD: ${usdBalance:F2}";
         jpyText.text = $"JPY: ¥{jpyBalance:F0}";
+    }
+
+    void UpdateExchangeRate()
+    {
         rateText.text = $"Rate: 1 USD = {jpyExchangeRate:F2} JPY";
-        
-        if (dayText != null) dayText.text = "Day: " + currentDay;
+    }
+
+    void SetClockText(int hour, int min, string period)
+    {
+        if (clockText != null)
+        {
+            clockText.text = $"{hour:D2}:{min:D2} {period}";
+        }
+    }
+
+    void UpdateStatusDisplay(string message)
+    {
+        if (newsText != null) newsText.text = message;
+    }
+
+    // --- Menu Functions ---
+    public void ShowJapanTrading()
+    {
+        mapHubPanel.SetActive(false);
+        japanTradingPanel.SetActive(true);
+
+        // Only show the button if the market is NOT open
+        if (startDayButton != null)
+        {
+            startDayButton.SetActive(!marketOpen);
+        }
+
+        // Only reset the clock to 9:00 AM if the day hasn't started yet
+        // Otherwise, entering the menu would 'teleport' the clock back to the start.
+        if (!marketOpen)
+        {
+            currentTimeInDay = 0f;
+            SetClockText(9, 0, "AM"); // Sets 09:00 AM
+            UpdateStatusDisplay("Market Closed. Press START to begin.");
+        } else
+        {
+            // If the market is already running, run the math once to catch up the UI
+            UpdateClockMath();
+        }
+
+            // Ensure the UI shows the current state (balances, 09:00 AM clock, etc.)
+            dayText.text = $"Day: {currentDay}";
+        UpdateBalanceDisplays(); // Set Currency Balances
+        UpdateExchangeRate(); // Set Exchange Rate
+    }
+
+    public void ShowPortfolio()
+    {
+        mapHubPanel.SetActive(false);
+        portfolioPanel.SetActive(true);
+
+        // Show total networth
+        UpdateNetWorthDisplay();
+    }
+
+    public void ShowMapHub()
+    {
+        mapHubPanel.SetActive(true);
+        japanTradingPanel.SetActive(false);
+        portfolioPanel.SetActive(false);
     }
 
     // --- Button Functions ---
@@ -192,7 +286,7 @@ public class CurrencyManager : MonoBehaviour
             double jpyGained = usdToSpend * jpyExchangeRate;
             usdBalance -= usdToSpend;
             jpyBalance += jpyGained;
-            UpdateTextDisplays();
+            UpdateBalanceDisplays();
             Debug.Log($"Buy: Spent {fraction*100:F0}% (${usdToSpend:F2}) for ¥{jpyGained:F0}");
         } else {
             Debug.Log("Not enough USD to buy JPY.");
@@ -211,7 +305,7 @@ public class CurrencyManager : MonoBehaviour
             double usdGained = jpyToSpend / jpyExchangeRate;
             usdBalance += usdGained;
             jpyBalance -= jpyToSpend;
-            UpdateTextDisplays();
+            UpdateBalanceDisplays();
             Debug.Log($"Sell: Spent {fraction*100:F0}% (¥{jpyToSpend:F0}) for ${usdGained:F2}");
         } else {
             Debug.Log("Not enough JPY to sell for USD.");
