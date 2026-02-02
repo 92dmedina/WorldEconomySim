@@ -17,6 +17,7 @@ public class CurrencyManager : MonoBehaviour
     [Header("Market Dynamics")]
     public double jpyExchangeRate = 150.0;
     public double marketTrend = 0.0;
+    private double openingRate;
 
     [Header("Day Cycle Settings")]
     public float dayDuration = 180f;
@@ -41,6 +42,7 @@ public class CurrencyManager : MonoBehaviour
     public TextMeshProUGUI buyPercentageText;
     public TextMeshProUGUI sellPercentageText;
     public TextMeshProUGUI totalNetWorthText;
+    public TextMeshProUGUI marketStatusText;
 
     void Start()
     {
@@ -85,14 +87,15 @@ public class CurrencyManager : MonoBehaviour
         currentTimeInDay = 0f;
         eventFiredToday = false;
         marketOpen = true;
+        marketStatusText.text = "Market Status: OPEN";
         // DECAY SYSTEM: Reduce the trend by 50% overnight
         marketTrend *= 0.5;
         if (newsText != null)
         {
             // If there's still a significant trend carrying over
-            if (marketTrend >= 0.005) newsText.text = "USD showing overnight strength.";
-            else if (marketTrend <= -0.005) newsText.text = "JPY carrying momentum from yesterday.";
-            else newsText.text = "Markets open with no significant news.";
+            if (marketTrend >= 0.001) newsText.text = "Market Showing USD momentum from yesterday.";
+            else if (marketTrend <= -0.001) newsText.text = "Market Showing JPY momentum from yesterday.";
+            else newsText.text = "Market currently showing no significant trend.";
         }
         scheduledEventTime = UnityEngine.Random.Range(5f, dayDuration - 5f);
         currentDay++;
@@ -126,7 +129,7 @@ public class CurrencyManager : MonoBehaviour
 
         usdBalance += interestEarned;
         UpdateBalanceDisplays();
-        UpdateStatusDisplay($"Market Closed. You earned ${interestEarned:F2} in bank interest.");
+        marketStatusText.text = $"Market Closed. You earned ${interestEarned:F2} in bank interest.";
     }
 
     void UpdateMarketPulse()
@@ -134,7 +137,7 @@ public class CurrencyManager : MonoBehaviour
         // Don't wiggle the numbers if the market is closed!
         if (!marketOpen) return;
 
-        double noise = UnityEngine.Random.Range(-0.01f, 0.01f);
+        double noise = UnityEngine.Random.Range(-0.0005f, 0.0005f);
         jpyExchangeRate += marketTrend + noise;
         if (jpyExchangeRate < 75.0) jpyExchangeRate = 75.0;
         UpdateExchangeRate();
@@ -156,35 +159,37 @@ public class CurrencyManager : MonoBehaviour
 
     void TriggerEconomyEvent()
     {
-        int eventRoll = UnityEngine.Random.Range(1, 7);
+        int eventRoll = UnityEngine.Random.Range(1, 21);
 
         if (eventRoll == 1)
         {
-            marketTrend = 0.025;
-            newsText.text = "US Federal Reserve hints at rate hikes. USD climbing.";
+            marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.01 : -0.01;
+            newsText.text = (marketTrend > 0) ? "FLASH: USD Skyrocketing!" : "FLASH: JPY Surge Incoming!";
         }
-        else if (eventRoll == 2)
+        else if (eventRoll >=2 && eventRoll <=7)
         {
-            marketTrend = 0.01;
-            newsText.text = "Consumer spending rises in the US. USD seeing steady gains.";
+            marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.004 : -0.004;
+            newsText.text = (marketTrend > 0) ? "Strong USD sentiment today." : "Strong JPY exports reported.";
         }
-        else if (eventRoll == 3)
+        else if (eventRoll >= 8 && eventRoll <= 13)
         {
-            marketTrend = -0.025;
-            newsText.text = "Japan's tech exports hit record highs. JPY strengthening.";
-        }
-        else if (eventRoll == 4)
-        {
-            marketTrend = -0.01;
-            newsText.text = "Tourism surge boosts local Japanese economy. JPY up slightly.";
+            marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.002 : -0.002;
+            newsText.text = (marketTrend > 0) ? "US markets showing modest gains." : "Japan tourism boosting the Yen.";
         }
         else
         {
-            marketTrend = 0.0;
-            newsText.text = "Global markets remain steady. No major news today.";
+            if (marketTrend == 0.0) 
+            {
+                newsText.text = "Global markets remain steady. No major news today.";
+            }
+            else
+            {
+                marketTrend = 0.0; 
+                newsText.text = "Global markets steady out. No major news today.";
+            }
         }
 
-        Debug.Log($"EVENT TRIGGERED: {newsText.text} (Trend: {marketTrend})");
+        Debug.Log($"EVENT TRIGGERED: {newsText.text} (Trend: {marketTrend} & {eventRoll})");
     }
 
     void UpdateNetWorthDisplay()
@@ -209,7 +214,13 @@ public class CurrencyManager : MonoBehaviour
 
     void UpdateExchangeRate()
     {
-        rateText.text = $"Rate: 1 USD = {jpyExchangeRate:F2} JPY";
+        // Calculate % change
+        double percentChange = (jpyExchangeRate - openingRate) / openingRate * 100;
+
+        // Format the string
+        string sign = (percentChange >= 0) ? "+" : ""; 
+        string colorHex = (percentChange >= 0) ? "green" : "red";
+        rateText.text = $"Rate: 1 USD = {jpyExchangeRate:F4} JPY <color={colorHex}>({sign}{percentChange:F3}%)</color>";
     }
 
     void SetClockText(int hour, int min, string period)
@@ -230,6 +241,8 @@ public class CurrencyManager : MonoBehaviour
     {
         mapHubPanel.SetActive(false);
         japanTradingPanel.SetActive(true);
+        openingRate = jpyExchangeRate;
+        marketStatusText.text = $"Market Status: CLOSED";
 
         // Only show the button if the market is NOT open
         if (startDayButton != null)
@@ -242,8 +255,8 @@ public class CurrencyManager : MonoBehaviour
         if (!marketOpen)
         {
             currentTimeInDay = 0f;
-            SetClockText(9, 0, "AM"); // Sets 09:00 AM
-            UpdateStatusDisplay("Market Closed. Press START to begin.");
+            SetClockText(9, 0, "AM"); // Sets 09:00 AM;
+            UpdateStatusDisplay("");
         } else
         {
             // If the market is already running, run the math once to catch up the UI
