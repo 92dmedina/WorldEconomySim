@@ -36,31 +36,37 @@ public class MenuManager : MonoBehaviour
             if (panel != null) panel.SetActive(false);
         }
 
-        // Check if this panel has a CurrencyID
-        CurrencyPanelID id = panelToOpen.GetComponent<CurrencyPanelID>();
-
         // Show the requested panel
         panelToOpen.SetActive(true);
 
-        // If the panel we just opened is inside the Trading folder...
-        if (id != null && !string.IsNullOrEmpty(id.currencyName))
-        {
-                currencyManager.currencyPanelID = id;
-                currencyManager.currencyText.text = $"{id.currencyName}: {id.currencySymbol}{id.currencyBalance:F0}";
-                currencyManager.UpdateExchangeRate(id.currentExchangeRate);
-                currencyManager.RefreshUI();
-        }
+        // Check if this panel has a CurrencyID or BankPanelID and update the CurrencyManager accordingly
+        CurrencyPanelID tradeID = panelToOpen.GetComponent<CurrencyPanelID>();
+        BankPanelID bankID = panelToOpen.GetComponent<BankPanelID>();
 
-        // Manage the Start Button visibility
-        if (id != null && !currencyManager.marketOpen)
+        // If the panel we just opened has a CurrencyPanelID, update the CurrencyManager UI
+        if (tradeID != null)
         {
-            currencyManager.startDayButton.SetActive(true);
+                currencyManager.currencyPanelID = tradeID;
+                currencyManager.currencyText.text = $"{tradeID.currencyName}: {tradeID.currencySymbol}{tradeID.currencyBalance:F0}";
+
+                if (!currencyManager.marketOpen)
+                {
+                    currencyManager.startDayButton.SetActive(true);
+                }
+        }
+        else if (bankID != null)
+        {
+            currencyManager.activeBankID = bankID;
+            currencyManager.bankInterestRateText.text = $"Daily Interest Rate: {bankID.dailyInterestRate}%";
+            currencyManager.startDayButton.SetActive(false);
         }
         else
         {
-            currencyManager.startDayButton.SetActive(false); // Hide it on Map/Settings
+            currencyManager.startDayButton.SetActive(false);
         }
-    } 
-}
+        currencyManager.RefreshUI();
+    }
+
+} 
 
 
