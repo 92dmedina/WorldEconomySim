@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -31,25 +32,19 @@ public class CurrencyManager : MonoBehaviour
     public TextMeshProUGUI buyPreviewText;
     public TMP_InputField sellAmountInput;
     public TextMeshProUGUI sellPreviewText;
-
-    [Header("UI Text Elements")]
-    public TextMeshProUGUI usdText;
-    public TextMeshProUGUI currencyText;
-    public TextMeshProUGUI rateText;
-    public TextMeshProUGUI dayText;
-    public TextMeshProUGUI newsText;
-    public TextMeshProUGUI clockText;
-    public TextMeshProUGUI buyPercentageText;
-    public TextMeshProUGUI sellPercentageText;
-    public TextMeshProUGUI totalNetWorthText;
-    public TextMeshProUGUI marketStatusText;
+    public TextMeshProUGUI sellButtonText;
+    public TextMeshProUGUI buyButtonText;
 
     [Header("Bank UI Elements")]
-    public GameObject bankCanvasPanel; // The visual panel itself (to turn on/off)
     public TextMeshProUGUI bankSavingsText;
     public TextMeshProUGUI bankWalletText;
     public TMP_InputField bankTransferInput; // The box where you type "$500"
     public TextMeshProUGUI bankInterestRateText;
+
+    [Header("Global Economy")]
+    public List<CurrencyPanelID> allCurrencies = new();
+
+    public TextUI textUI;
 
     void Start()
     {
@@ -60,11 +55,15 @@ public class CurrencyManager : MonoBehaviour
     void Update()
     {
         // This allows the percentages to update even when the market is closed
-        if (buyPercentageText != null && buySlider != null)
-            buyPercentageText.text = (buySlider.value / buySlider.maxValue * 100f).ToString("F0") + "%";
+        if (textUI.buyPercentageText != null && buySlider != null)
+            {
+                textUI.buyPercentageText.text = (buySlider.value / buySlider.maxValue * 100f).ToString("F0") + "%";
+            }
 
-        if (sellPercentageText != null && sellSlider != null)
-            sellPercentageText.text = (sellSlider.value / sellSlider.maxValue * 100f).ToString("F0") + "%";
+        if (textUI.sellPercentageText != null && sellSlider != null)
+            {
+                textUI.sellPercentageText.text = (sellSlider.value / sellSlider.maxValue * 100f).ToString("F0") + "%";
+            }
 
         // If the market isn't open, we stop here.
         if (!marketOpen) return;
@@ -83,10 +82,7 @@ public class CurrencyManager : MonoBehaviour
         }
 
         // 5. End of Day Check
-        if (currentTimeInDay >= dayDuration)
-        {
-            EndTradingDay();
-        }
+        if (currentTimeInDay >= dayDuration) { EndTradingDay(); }
     }
 
     // Core Game Loop Functions
@@ -95,20 +91,20 @@ public class CurrencyManager : MonoBehaviour
         currentTimeInDay = 0f;
         eventFiredToday = false;
         marketOpen = true;
-        if (marketStatusText != null) marketStatusText.text = "Market Status: OPEN";
-        if (dayText != null) dayText.text = $"Day: {currentDay}";
+        if (textUI.marketStatusText != null) { textUI.marketStatusText.text = "Market Status: OPEN"; }
+        if (textUI.dayText != null) { textUI.dayText.text = $"Day: {currentDay}"; }
             // DECAY SYSTEM: Reduce the trend by 50% overnight
         marketTrend *= 0.5;
-        if (newsText != null)
+        if (textUI.newsText != null)
         {
             // If there's still a significant trend carrying over
-            if (marketTrend >= 0.001) newsText.text = "Market Showing USD momentum from yesterday.";
-            else if (marketTrend <= -0.001) newsText.text = "Market Showing JPY momentum from yesterday.";
-            else newsText.text = "Market currently showing no significant trend.";
+            if (marketTrend >= 0.001) { textUI.newsText.text = "Market Showing USD momentum from yesterday."; }
+            else if (marketTrend <= -0.001) { textUI.newsText.text = "Market Showing JPY momentum from yesterday."; }
+            else { textUI.newsText.text = "Market currently showing no significant trend."; }
         }
         scheduledEventTime = UnityEngine.Random.Range(5f, dayDuration - 5f);
 
-        if (startDayButton != null) startDayButton.SetActive(false);
+        if (startDayButton != null) { startDayButton.SetActive(false); }
         Debug.Log($"Today's news will trigger at: {scheduledEventTime:F1}s");
     }
 
@@ -120,7 +116,7 @@ public class CurrencyManager : MonoBehaviour
 
         // Calculate Interest and log result
         CalculateDailyInterest();
-        if (startDayButton != null) startDayButton.SetActive(true);
+        if (startDayButton != null) { startDayButton.SetActive(true); }
     }
 
     public void OnStartNextDayClicked()
@@ -142,12 +138,11 @@ public class CurrencyManager : MonoBehaviour
 
     public void UpdateExchangeRate(double exchangeRate)
     {
-        if (currencyPanelID == null || rateText == null)
-            return;
+        if (currencyPanelID == null || textUI.rateText == null) return;
 
         if (Math.Abs(currencyPanelID.openingRate) < double.Epsilon)
         {
-            rateText.text = $"Rate: 1 USD = {exchangeRate:F4} {currencyPanelID.currencyName} (N/A)";
+            textUI.rateText.text = $"Rate: 1 USD = {exchangeRate:F4} {currencyPanelID.currencyName} (N/A)";
             return;
         }
 
@@ -157,7 +152,7 @@ public class CurrencyManager : MonoBehaviour
         // Format the string
         string sign = (ratePercentage >= 0) ? "+" : "";
         string colorHex = (ratePercentage >= 0) ? "green" : "red";
-        rateText.text = $"Rate: 1 USD = {exchangeRate:F4} {currencyPanelID.currencyName} <color={colorHex}>({sign}{ratePercentage:F3}%)</color>";
+        textUI.rateText.text = $"Rate: 1 USD = {exchangeRate:F4} {currencyPanelID.currencyName} <color={colorHex}>({sign}{ratePercentage:F3}%)</color>";
     }
 
     // Economy Event Functions
@@ -169,14 +164,18 @@ public class CurrencyManager : MonoBehaviour
             double interestEarned = activeBankID.savingsBalance * activeBankID.dailyInterestRate;
             // Add the money directly to the bank account, not the wallet balance
             activeBankID.savingsBalance += interestEarned;
-            if (marketStatusText != null)
-                marketStatusText.text = $"Market Closed. Bank paid ${interestEarned:F2} in interest.";
+            if (textUI.marketStatusText != null)
+            {
+                textUI.marketStatusText.text = $"Market Closed. Bank paid ${interestEarned:F2} in interest.";
+            }
             Debug.Log($"Interest Paid: ${interestEarned:F2} added to {activeBankID.bankName}");
         }
         else
         {
-            if (marketStatusText != null) 
-            marketStatusText.text = "Market Closed. (No Bank Account Active)";
+            if (textUI.marketStatusText != null)
+            {
+                textUI.marketStatusText.text = "Market Closed. (No Bank Account Active)";
+            }
         }
         UpdateBalanceDisplays();
     }
@@ -198,7 +197,7 @@ public class CurrencyManager : MonoBehaviour
     void TriggerEconomyEvent()
     {
         if (currencyPanelID == null)
-        {
+{
             Debug.LogWarning("EVENT SKIPPED: currencyPanelID not assigned.");
             return;
         }
@@ -233,55 +232,56 @@ public class CurrencyManager : MonoBehaviour
             }
         }
 
-        if (newsText != null) newsText.text = newText;
+        if (textUI.newsText != null) {textUI.newsText.text = newText;}
         Debug.Log($"EVENT TRIGGERED: {newText} (Trend: {marketTrend} & {eventRoll})");
     }
 
     // UI Update Functions
     void UpdateNetWorthDisplay()
     {
-        if (totalNetWorthText == null) return;
+        if (textUI.totalNetWorthText == null) return;
 
-        // Start with base USD cash
+        // Start with wallet + bank savings
         double totalInUsd = usdBalance;
+        if (activeBankID != null) {totalInUsd += activeBankID.savingsBalance;}
 
-        if (activeBankID != null)
+        // loop through all currencies and convert to USD
+        foreach (CurrencyPanelID currency in allCurrencies)
         {
-            totalInUsd += activeBankID.savingsBalance;
+            if (currency != null && Math.Abs(currency.currentExchangeRate) > double.Epsilon)
+            {
+                double currencyInUsd = currency.currencyBalance / currency.currentExchangeRate;
+                totalInUsd += currencyInUsd;
+            }
         }
 
-        if (currencyPanelID != null && Math.Abs(currencyPanelID.currentExchangeRate) > double.Epsilon)
-        {
-            // Convert foreign currency to USD and add to total
-            double currencyInUsd = currencyPanelID.currencyBalance / currencyPanelID.currentExchangeRate;
-            totalInUsd += currencyInUsd;
-        }
-
-        totalNetWorthText.text = $"Total Net Worth: ${totalInUsd:F2} (USD)";
+        textUI.totalNetWorthText.text = $"Total Net Worth: ${totalInUsd:F2} (USD)";
     }
 
     void UpdateBalanceDisplays()
     {
-        if (usdText != null) usdText.text = $"USD: ${usdBalance:F2}";
+        if (textUI.usdText != null) {textUI.usdText.text = $"USD: ${usdBalance:F2}";}
          
-        if (currencyText != null && currencyPanelID != null) 
-            currencyText.text = $"{currencyPanelID.currencyName}: {currencyPanelID.currencySymbol}{currencyPanelID.currencyBalance:F0}";
+        if (textUI.currencyText != null && currencyPanelID != null)
+        {
+            textUI.currencyText.text = $"{currencyPanelID.currencyName}: {currencyPanelID.currencySymbol}{currencyPanelID.currencyBalance:F0}";
+        }
     }
 
     void SetClockText(int hour, int min, string period)
     {
-        if (clockText != null)
+        if (textUI.clockText != null)
         {
-            clockText.text = $"{hour:D2}:{min:D2} {period}";
+            textUI.clockText.text = $"{hour:D2}:{min:D2} {period}";
         }
     }
 
     public void UpdateStatusDisplay(string message)
     {
-        if (newsText != null) newsText.text = message;
+        if (textUI.newsText != null) {textUI.newsText.text = message;}
         string status = marketOpen ? "OPEN" : "CLOSED";
-        if (marketStatusText != null) marketStatusText.text = $"Market Status: {status}";
-        if (dayText != null) dayText.text = $"Day: {currentDay}";
+        if (textUI.marketStatusText != null) {textUI.marketStatusText.text = $"Market Status: {status}";}
+        if (textUI.dayText != null) {textUI.dayText.text = $"Day: {currentDay}";}
     }
 
     void UpdateBankUI()
@@ -289,29 +289,53 @@ public class CurrencyManager : MonoBehaviour
         // Safety Check: If we aren't looking at a bank, don't try to update it
         if (activeBankID == null) return;
 
-        if (bankSavingsText != null)
-            bankSavingsText.text = $"Savings: ${activeBankID.savingsBalance:F2}";
+        if (bankSavingsText != null) { bankSavingsText.text = $"Savings: ${activeBankID.savingsBalance:F2}"; }
     
-        if (bankWalletText != null)
-            bankWalletText.text = $"Wallet: ${usdBalance:F2}";
+        if (bankWalletText != null) { bankWalletText.text = $"Wallet: ${usdBalance:F2}"; }
     }
 
     public void RefreshUI()
     {
+        // Global Updates (Always run)
         UpdateBalanceDisplays();
         UpdateNetWorthDisplay();
-        if (currencyPanelID != null) UpdateExchangeRate(currencyPanelID.currentExchangeRate);
         UpdateClockMath();
         UpdateBankUI();
-        if (buySlider != null) 
+
+        // Reset Inputs (Clean slate for the new screen)
+        if (buySlider != null) { buySlider.value = 0; OnBuySliderDrag(); }
+        if (sellSlider != null) { sellSlider.value = 0; OnSellSliderDrag(); }
+
+        // 3. Context-Specific Updates (Trading vs Empty)
+        if (currencyPanelID != null)
         {
-            buySlider.value = 0;
-            OnBuySliderDrag();
+            UpdateExchangeRate(currencyPanelID.currentExchangeRate);
+        
+            // Update Title: "Euro: €500"
+            if (textUI.currencyText != null)
+            {
+            textUI.currencyText.text = $"{currencyPanelID.currencyName}: {currencyPanelID.currencySymbol}{currencyPanelID.currencyBalance:F0}";
+            }
+            // Update Symbol: "€"
+            if (textUI.sellSymbolLabel != null)
+            {
+            textUI.sellSymbolLabel.text = currencyPanelID.currencySymbol;
+            }
+            // Update Button Text
+            if (buyButtonText != null) { buyButtonText.text = $"Buy {currencyPanelID.currencyName}"; }
+            if (sellButtonText != null) { sellButtonText.text = $"Sell {currencyPanelID.currencyName}"; }
         }
-        if (sellSlider != null) 
+        else
         {
-            sellSlider.value = 0;
-            OnSellSliderDrag();
+            // We are on Map/Bank
+            if (textUI.currencyText != null) { textUI.currencyText.text = "Market Overview"; } // Or "Select a Market"
+            if (textUI.sellSymbolLabel != null) { textUI.sellSymbolLabel.text = ""; }
+        }
+
+        // 4. Bank Specifics
+        if (activeBankID != null && bankInterestRateText != null)
+        {
+            bankInterestRateText.text = $"Daily Interest Rate: {activeBankID.dailyInterestRate}%";
         }
     }
     // Slider and Input Field Functions
@@ -330,18 +354,14 @@ public class CurrencyManager : MonoBehaviour
             double expectedYield = usdCost * currencyPanelID.currentExchangeRate;
         
             // Update both displays
-            if (buyAmountInput != null) 
-                buyAmountInput.SetTextWithoutNotify(usdCost.ToString("F2"));
+            if (buyAmountInput != null) { buyAmountInput.SetTextWithoutNotify(usdCost.ToString("F2")); }
             
-            if (buyPreviewText != null)
-                buyPreviewText.text = $"You Get: {currencyPanelID.currencySymbol}{expectedYield:F2}";
+            if (buyPreviewText != null) { buyPreviewText.text = $"You Get: {currencyPanelID.currencySymbol}{expectedYield:F2}"; }
         }
         else
         {
-            if (buyAmountInput != null) 
-                buyAmountInput.SetTextWithoutNotify(usdCost.ToString("F2"));
-            if (buyPreviewText != null)
-                buyPreviewText.text = $"You Get: -";
+            if (buyAmountInput != null) { buyAmountInput.SetTextWithoutNotify(usdCost.ToString("F2")); }
+            if (buyPreviewText != null) { buyPreviewText.text = $"You Get: -"; }
         }
     }
 
@@ -352,8 +372,8 @@ public class CurrencyManager : MonoBehaviour
         if (double.TryParse(text, out double amount))
         {
             // 2. Clamp it: They can't type $500 if they only have $100
-            if (amount > usdBalance) amount = usdBalance;
-            if (amount < 0) amount = 0;
+            if (amount > usdBalance) { amount = usdBalance; }
+            if (amount < 0) { amount = 0; }
 
             // 3. Reverse math: Calculate where the slider should be
             float fraction = 0f;
@@ -363,8 +383,7 @@ public class CurrencyManager : MonoBehaviour
             }
         
             // 4. Move the slider to match their typing
-            if (buySlider != null)
-                buySlider.SetValueWithoutNotify(fraction * buySlider.maxValue);
+            if (buySlider != null) { buySlider.SetValueWithoutNotify(fraction * buySlider.maxValue); }
             // 5. Update the preview text
             if (currencyPanelID != null)
             {
@@ -385,11 +404,9 @@ public class CurrencyManager : MonoBehaviour
     {
         // Guard: Can't sell if we don't know what currency we are looking at
         if (currencyPanelID == null) return;
+
         // 1. Set the slider to its maximum value (100%)
-        if (buySlider != null)
-        {
-            buySlider.value = buySlider.maxValue;
-        }
+        if (buySlider != null) { buySlider.value = buySlider.maxValue; }
     
         // 2. Force the update so the Text Box and Preview Label sync up
         OnBuySliderDrag();
@@ -407,21 +424,20 @@ public class CurrencyManager : MonoBehaviour
         {
             double amountToSell = currencyPanelID.currencyBalance * fraction;
             double expectedYield = 0.0;
-            if (Math.Abs(currencyPanelID.currentExchangeRate) > double.Epsilon)
-                expectedYield = amountToSell / currencyPanelID.currentExchangeRate;
 
-            if (sellAmountInput != null) 
-                sellAmountInput.SetTextWithoutNotify(amountToSell.ToString("F0"));
+            if (Math.Abs(currencyPanelID.currentExchangeRate) > double.Epsilon)
+            {
+                expectedYield = amountToSell / currencyPanelID.currentExchangeRate;
+            }
+
+            if (sellAmountInput != null) { sellAmountInput.SetTextWithoutNotify(amountToSell.ToString("F0")); }
             
-            if (sellPreviewText != null)
-                sellPreviewText.text = $"You Get: ${expectedYield:F2}";
+            if (sellPreviewText != null) { sellPreviewText.text = $"You Get: ${expectedYield:F2}"; }
         }
         else
         {
-            if (sellAmountInput != null) 
-                sellAmountInput.SetTextWithoutNotify("0");
-            if (sellPreviewText != null)
-                sellPreviewText.text = $"You Get: $0.00";
+            if (sellAmountInput != null) { sellAmountInput.SetTextWithoutNotify("0"); }
+            if (sellPreviewText != null) { sellPreviewText.text = $"You Get: $0.00"; }
         }
     }
 
@@ -433,28 +449,28 @@ public class CurrencyManager : MonoBehaviour
         if (double.TryParse(text, out double amount))
         {
             // 1. Clamp to the actual foreign balance (e.g., You can't sell 10,000 Yen if you only have 5,000)
-            if (amount > currencyPanelID.currencyBalance) amount = currencyPanelID.currencyBalance;
-            if (amount < 0) amount = 0;
+            if (amount > currencyPanelID.currencyBalance) { amount = currencyPanelID.currencyBalance; }
+            if (amount < 0) { amount = 0; }
 
             // 2. Calculate the fraction for the slider
             // Safety check: Avoid dividing by zero if balance is empty
             float fraction = 0f;
+
             if (currencyPanelID.currencyBalance > 0)
             {
                 fraction = (float)(amount / currencyPanelID.currencyBalance);
             }
-            if (sellSlider != null)
-                sellSlider.SetValueWithoutNotify(fraction * sellSlider.maxValue);
+
+            if (sellSlider != null) { sellSlider.SetValueWithoutNotify(fraction * sellSlider.maxValue); }
 
             double expectedYield = 0.0;
+
             if (Math.Abs(currencyPanelID.currentExchangeRate) > double.Epsilon)
             {
                 expectedYield = amount / currencyPanelID.currentExchangeRate;
             }
-            if (sellPreviewText != null)
-            {
-                sellPreviewText.text = $"You Get: ${expectedYield:F2}";
-            }
+
+            if (sellPreviewText != null) { sellPreviewText.text = $"You Get: ${expectedYield:F2}"; }
         }
     }
 
@@ -464,10 +480,7 @@ public class CurrencyManager : MonoBehaviour
         if (currencyPanelID == null) return;
 
         // 1. Set the slider to its maximum value (100%)
-        if (sellSlider != null)
-        {
-            sellSlider.value = sellSlider.maxValue;
-        }
+        if (sellSlider != null) { sellSlider.value = sellSlider.maxValue; }
     
         // 2. Force the update so the Text Box and Preview Label sync up
         OnSellSliderDrag();
@@ -546,7 +559,7 @@ public class CurrencyManager : MonoBehaviour
             if (amount <= 0) return; 
         
             // Validation 2: Can't deposit money you don't have
-            if (amount > usdBalance) amount = usdBalance;
+            if (amount > usdBalance) { amount = usdBalance; }
 
             // The Transaction
             usdBalance -= amount;
@@ -570,7 +583,7 @@ public class CurrencyManager : MonoBehaviour
         if (amount <= 0) return;
 
             // Validation 2: Can't withdraw money the bank doesn't have
-            if (amount > activeBankID.savingsBalance) amount = activeBankID.savingsBalance;
+            if (amount > activeBankID.savingsBalance) { amount = activeBankID.savingsBalance; }
 
             // The Transaction
             activeBankID.savingsBalance -= amount;
@@ -582,5 +595,22 @@ public class CurrencyManager : MonoBehaviour
             UpdateBalanceDisplays();
             Debug.Log($"Withdrew ${amount:F2}. New Wallet: ${usdBalance:F2}");
         }
-    } 
+    }
+
+    [Serializable]
+    public class TextUI
+    {
+        [Header("UI Text Elements")]
+        public TextMeshProUGUI usdText;
+        public TextMeshProUGUI currencyText;
+        public TextMeshProUGUI rateText;
+        public TextMeshProUGUI dayText;
+        public TextMeshProUGUI newsText;
+        public TextMeshProUGUI clockText;
+        public TextMeshProUGUI buyPercentageText;
+        public TextMeshProUGUI sellPercentageText;
+        public TextMeshProUGUI totalNetWorthText;
+        public TextMeshProUGUI marketStatusText;
+        public TextMeshProUGUI sellSymbolLabel;
+    }
 }

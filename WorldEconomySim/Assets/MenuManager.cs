@@ -10,6 +10,7 @@ public class MenuManager : MonoBehaviour
     [Header("Containers")]
     public GameObject menuPanelsContainer;    // Folder for Map, Portfolio, etc.
     public GameObject tradingPanelsContainer; // Folder for Japan, Europe, etc.
+    public GameObject tradingDashboard;       // The dashboard that appears when any trading panel is open
 
     private readonly List<GameObject> allPanels = new();
 
@@ -46,8 +47,8 @@ public class MenuManager : MonoBehaviour
         // If the panel we just opened has a CurrencyPanelID, update the CurrencyManager UI
         if (tradeID != null)
         {
+                tradingDashboard.SetActive(true);
                 currencyManager.currencyPanelID = tradeID;
-                currencyManager.currencyText.text = $"{tradeID.currencyName}: {tradeID.currencySymbol}{tradeID.currencyBalance:F0}";
 
                 if (!currencyManager.marketOpen)
                 {
@@ -56,13 +57,15 @@ public class MenuManager : MonoBehaviour
         }
         else if (bankID != null)
         {
+            tradingDashboard.SetActive(false);
             currencyManager.activeBankID = bankID;
-            currencyManager.bankInterestRateText.text = $"Daily Interest Rate: {bankID.dailyInterestRate}%";
             currencyManager.startDayButton.SetActive(false);
         }
         else
         {
+            tradingDashboard.SetActive(false);
             currencyManager.startDayButton.SetActive(false);
+            currencyManager.currencyPanelID = null;
         }
         currencyManager.RefreshUI();
     }
