@@ -2,13 +2,16 @@ using UnityEngine;
 
 public class CurrencyPanelID : MonoBehaviour
 {
+    [Header("Currency Info")]
     public string currencyName = "";
-    public double openingRate;
-    public double currentExchangeRate;
-    public double currencyBalance;
     public string countryName = "";
     public string currencySymbol = "";
 
+    [Header("Economic Values")]
+    public double openingRate;
+    public double currentExchangeRate;
+    public double currencyBalance;
+    
     void Start()
 {
     // Find the Manager

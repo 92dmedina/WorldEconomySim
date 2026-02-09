@@ -405,7 +405,9 @@ MonoBehaviour:
   currencyPanelID: {fileID: 0}
   activeBankID: {fileID: 922537038}
   usdBalance: 100
-  marketTrend: 0
+  currentMomentum: 0
+  friction: 0.98
+  volatility: 1
   dayDuration: 180
   marketOpen: 0
   buySlider: {fileID: 1431791431}
@@ -421,6 +423,7 @@ MonoBehaviour:
   bankWalletText: {fileID: 1483183273}
   bankTransferInput: {fileID: 27347262}
   bankInterestRateText: {fileID: 486928247}
+  currencyContainer: {fileID: 231526769}
   allCurrencies: []
   textUI:
     usdText: {fileID: 1436148079}
@@ -3561,7 +3564,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &922537035
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7479,11 +7482,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CurrencyPanelID
   currencyName: JPY
+  countryName: Japan
+  currencySymbol: "\xA5"
   openingRate: 150
   currentExchangeRate: 150
   currencyBalance: 0
-  countryName: Japan
-  currencySymbol: "\xA5"
 --- !u!1 &1483183271
 GameObject:
   m_ObjectHideFlags: 0
@@ -8115,11 +8118,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CurrencyPanelID
   currencyName: EUR
+  countryName: Europe
+  currencySymbol: "\u20AC"
   openingRate: 0.84
   currentExchangeRate: 0.84
   currencyBalance: 0
-  countryName: Europe
-  currencySymbol: "\u20AC"
 --- !u!114 &1529070771
 MonoBehaviour:
   m_ObjectHideFlags: 0

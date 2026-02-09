@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Linq;
 
 public class CurrencyManager : MonoBehaviour
 {
@@ -14,7 +15,9 @@ public class CurrencyManager : MonoBehaviour
     public double usdBalance = 100.0;
 
     [Header("Market Dynamics")]
-    public double marketTrend = 0.0;
+    public double currentMomentum = 0.0; // Speed of market change
+    public float friction = 0.98f; // How quickly momentum decays
+    public float volatility = 1.0f; // How much random noise is added each update
 
     [Header("Day Cycle Settings")]
     public float dayDuration = 180f;
@@ -45,13 +48,32 @@ public class CurrencyManager : MonoBehaviour
     public TextMeshProUGUI bankInterestRateText;
 
     [Header("Global Economy")]
+    public GameObject currencyContainer;
     public List<CurrencyPanelID> allCurrencies = new();
+
+    // [ContextMenu] lets you right-click the component in the Inspector to fire this!
+    [ContextMenu("Force Flash Event")] 
+    public void TestFlashEvent() { ForceEvent(1); }
+
+    [ContextMenu("Force Strong Event")]
+    public void TestStrongEvent() { ForceEvent(5); }
+
+    [ContextMenu("Force Minor Event")]
+    public void TestMinorEvent() { ForceEvent(10); }
 
     public TextUI textUI;
 
     void Start()
     {
+        if (currencyContainer != null)
+        {
+            var foundCurrencies = currencyContainer.GetComponentsInChildren<CurrencyPanelID>(true);
+            allCurrencies = new List<CurrencyPanelID>(foundCurrencies);
+            Debug.Log($"Found {allCurrencies.Count} currencies in the container.");
+        }
+
         InvokeRepeating(nameof(UpdateMarketPulse), 0.5f, 0.5f);
+
         RefreshUI();
     }
 
@@ -94,16 +116,21 @@ public class CurrencyManager : MonoBehaviour
         currentTimeInDay = 0f;
         eventFiredToday = false;
         marketOpen = true;
+
         if (textUI.marketStatusText != null) { textUI.marketStatusText.text = "Market Status: OPEN"; }
         if (textUI.dayText != null) { textUI.dayText.text = $"Day: {currentDay}"; }
             // DECAY SYSTEM: Reduce the trend by 50% overnight
-        marketTrend *= 0.5;
+        currentMomentum *= 0.5;
         if (textUI.newsText != null)
         {
             // If there's still a significant trend carrying over
-            if (marketTrend >= 0.001) { currentNewsTemplate = "Market Showing USD momentum from yesterday."; }
-            else if (marketTrend <= -0.001) { currentNewsTemplate = "Market Showing JPY momentum from yesterday."; }
-            else { currentNewsTemplate = "Market currently showing no significant trend."; }
+            if (currentMomentum >= 0.0005) { currentNewsTemplate = "Market Showing USD momentum from yesterday."; }
+            else if (currentMomentum <= -0.0005) { currentNewsTemplate = "Market Showing {0} momentum from yesterday."; }
+            else 
+            { 
+                currentMomentum = 0.0; // Stop tiny momentum values from lingering
+                currentNewsTemplate = "Market currently showing no significant trend from overnight."; 
+            }
         }
         scheduledEventTime = UnityEngine.Random.Range(5f, dayDuration - 5f);
 
@@ -111,6 +138,7 @@ public class CurrencyManager : MonoBehaviour
 
         RefreshUI();
         Debug.Log($"Today's news will trigger at: {scheduledEventTime:F1}s");
+        Debug.Log($"Day {currentDay} Start. Momentum: {currentMomentum:F5}");
     }
 
     void EndTradingDay()
@@ -136,11 +164,26 @@ public class CurrencyManager : MonoBehaviour
         // Don't wiggle the numbers if the market is closed!
         if (!marketOpen) return;
 
-        if (currencyPanelID == null) return;
+        foreach (CurrencyPanelID currency in allCurrencies)
+        {
+            if (currency == null)
+            {
+                Debug.LogWarning("Null currency found in allCurrencies list. Skipping.");
+                continue;
+            }
+            double uniqueNoise = UnityEngine.Random.Range(-0.0001f, 0.0001f) * volatility;
+            double totalPercentChange = currentMomentum + uniqueNoise;
+            currency.currentExchangeRate *= 1.0 + totalPercentChange;
+        }
 
-        double noise = UnityEngine.Random.Range(-0.0005f, 0.0005f);
-        currencyPanelID.currentExchangeRate += marketTrend + noise;
-        UpdateExchangeRate(currencyPanelID.currentExchangeRate);
+        currentMomentum *= friction;
+
+        if (Math.Abs(currentMomentum) < 0.00001) { currentMomentum = 0.0; } // Stop tiny momentum values from lingering
+        
+        if (currencyPanelID != null)
+        {
+            UpdateExchangeRate(currencyPanelID.currentExchangeRate);
+        }
     }
 
     public void UpdateExchangeRate(double exchangeRate)
@@ -200,48 +243,54 @@ public class CurrencyManager : MonoBehaviour
 
         SetClockText(displayHour, minutes, period);
     }
-
-    void TriggerEconomyEvent()
+    
+    void ForceEvent (int roll)
     {
-        if (currencyPanelID == null)
-{
-            Debug.LogWarning("EVENT SKIPPED: currencyPanelID not assigned.");
-            return;
-        }
+        UnityEngine.Random.InitState((int)System.DateTime.Now.Ticks); // Reseed to get fresh randomness
+        TriggerEconomyEvent(roll);
+    }
 
-        int eventRoll = UnityEngine.Random.Range(1, 21);
+    void TriggerEconomyEvent(int forcedRoll = -1)
+    {
+        int eventRoll = (forcedRoll != -1) ? forcedRoll : UnityEngine.Random.Range(1, 21);
+        double shoveAmount = 0.0;
+
+        // Tweak these numbers to adjust how much each event type moves the market
+        double flashSize = 0.0005;
+        double strongSize = 0.0002;
+        double minorSize = 0.00005;
 
         if (eventRoll == 1)
         {
-            marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.01 : -0.01;
-            currentNewsTemplate = (marketTrend > 0) ? "FLASH: USD Skyrocketing!" : "FLASH: {0} Surge Incoming!";
+            shoveAmount = (UnityEngine.Random.value > 0.5f) ? flashSize : -flashSize;
+            currentNewsTemplate = (shoveAmount > 0) ? "FLASH: USD Skyrocketing!" : "FLASH: {0} Surge Incoming!";
         }
         else if (eventRoll >=2 && eventRoll <=7)
         {
-            marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.004 : -0.004;
-            currentNewsTemplate = (marketTrend > 0) ? "Strong USD sentiment today." : "Strong {0} exports reported.";
+            shoveAmount = (UnityEngine.Random.value > 0.5f) ? strongSize : -strongSize;
+            currentNewsTemplate = (shoveAmount > 0) ? "Strong USD sentiment today." : "Strong {0} exports reported.";
         }
         else if (eventRoll >= 8 && eventRoll <= 13)
         {
-            marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.002 : -0.002;
-            currentNewsTemplate = (marketTrend > 0) ? "US markets showing modest gains." : "{0} tourism boosting local economy.";
+            shoveAmount = (UnityEngine.Random.value > 0.5f) ? minorSize : -minorSize;
+            currentNewsTemplate = (shoveAmount > 0) ? "US markets showing modest gains." : "{0} tourism boosting local economy.";
         }
         else
         {
-            if (marketTrend != 0.0) 
+            if (shoveAmount != 0.0) 
             {
-                marketTrend = 0.0;
+                currentMomentum *= 0.2f;
                 currentNewsTemplate = "Global markets steady out. No major news today.";
             }
             else
             {
-                
                 currentNewsTemplate = "Global markets remain steady. No major news today.";
             }
         }
 
+        currentMomentum += shoveAmount;
         UpdateNewsDisplay();
-        Debug.Log($"EVENT TRIGGERED: {textUI.newsText.text} (Trend: {marketTrend} & {eventRoll})");
+        Debug.Log($"EVENT: Roll {eventRoll} | Shove {shoveAmount:F4} | New Momentum: {currentMomentum:F5}");
     }
 
     // UI Update Functions
