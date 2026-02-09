@@ -69,7 +69,6 @@ public class MenuManager : MonoBehaviour
         }
         currencyManager.RefreshUI();
     }
-
 } 
 
 

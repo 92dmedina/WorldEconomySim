@@ -35,6 +35,9 @@ public class CurrencyManager : MonoBehaviour
     public TextMeshProUGUI sellButtonText;
     public TextMeshProUGUI buyButtonText;
 
+    [Header("News System")]
+    private string currentNewsTemplate = "Press Start to begin trading";
+
     [Header("Bank UI Elements")]
     public TextMeshProUGUI bankSavingsText;
     public TextMeshProUGUI bankWalletText;
@@ -49,7 +52,7 @@ public class CurrencyManager : MonoBehaviour
     void Start()
     {
         InvokeRepeating(nameof(UpdateMarketPulse), 0.5f, 0.5f);
-        UpdateStatusDisplay("Press 'Start Day' to begin trading.");
+        RefreshUI();
     }
 
     void Update()
@@ -98,13 +101,15 @@ public class CurrencyManager : MonoBehaviour
         if (textUI.newsText != null)
         {
             // If there's still a significant trend carrying over
-            if (marketTrend >= 0.001) { textUI.newsText.text = "Market Showing USD momentum from yesterday."; }
-            else if (marketTrend <= -0.001) { textUI.newsText.text = "Market Showing JPY momentum from yesterday."; }
-            else { textUI.newsText.text = "Market currently showing no significant trend."; }
+            if (marketTrend >= 0.001) { currentNewsTemplate = "Market Showing USD momentum from yesterday."; }
+            else if (marketTrend <= -0.001) { currentNewsTemplate = "Market Showing JPY momentum from yesterday."; }
+            else { currentNewsTemplate = "Market currently showing no significant trend."; }
         }
         scheduledEventTime = UnityEngine.Random.Range(5f, dayDuration - 5f);
 
         if (startDayButton != null) { startDayButton.SetActive(false); }
+
+        RefreshUI();
         Debug.Log($"Today's news will trigger at: {scheduledEventTime:F1}s");
     }
 
@@ -117,6 +122,8 @@ public class CurrencyManager : MonoBehaviour
         // Calculate Interest and log result
         CalculateDailyInterest();
         if (startDayButton != null) { startDayButton.SetActive(true); }
+
+        RefreshUI();
     }
 
     public void OnStartNextDayClicked()
@@ -203,40 +210,52 @@ public class CurrencyManager : MonoBehaviour
         }
 
         int eventRoll = UnityEngine.Random.Range(1, 21);
-        string newText;
+
         if (eventRoll == 1)
         {
             marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.01 : -0.01;
-            newText = (marketTrend > 0) ? "FLASH: USD Skyrocketing!" : $"FLASH: {currencyPanelID.currencyName} Surge Incoming!";
+            currentNewsTemplate = (marketTrend > 0) ? "FLASH: USD Skyrocketing!" : "FLASH: {0} Surge Incoming!";
         }
         else if (eventRoll >=2 && eventRoll <=7)
         {
             marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.004 : -0.004;
-            newText = (marketTrend > 0) ? "Strong USD sentiment today." : $"Strong {currencyPanelID.currencyName} exports reported.";
+            currentNewsTemplate = (marketTrend > 0) ? "Strong USD sentiment today." : "Strong {0} exports reported.";
         }
         else if (eventRoll >= 8 && eventRoll <= 13)
         {
             marketTrend = (UnityEngine.Random.value > 0.5f) ? 0.002 : -0.002;
-            newText = (marketTrend > 0) ? "US markets showing modest gains." : $"{currencyPanelID.countryName} tourism boosting {currencyPanelID.currencyName}.";
+            currentNewsTemplate = (marketTrend > 0) ? "US markets showing modest gains." : "{0} tourism boosting local economy.";
         }
         else
         {
-            if (marketTrend == 0.0) 
+            if (marketTrend != 0.0) 
             {
-                newText = "Global markets remain steady. No major news today.";
+                marketTrend = 0.0;
+                currentNewsTemplate = "Global markets steady out. No major news today.";
             }
             else
             {
-                marketTrend = 0.0; 
-                newText = "Global markets steady out. No major news today.";
+                
+                currentNewsTemplate = "Global markets remain steady. No major news today.";
             }
         }
 
-        if (textUI.newsText != null) {textUI.newsText.text = newText;}
-        Debug.Log($"EVENT TRIGGERED: {newText} (Trend: {marketTrend} & {eventRoll})");
+        UpdateNewsDisplay();
+        Debug.Log($"EVENT TRIGGERED: {textUI.newsText.text} (Trend: {marketTrend} & {eventRoll})");
     }
 
     // UI Update Functions
+
+    void UpdateNewsDisplay()
+    {
+        if (textUI.newsText == null) return;
+
+        if (currencyPanelID != null)
+        {
+            textUI.newsText.text = string.Format(currentNewsTemplate, currencyPanelID.currencyName);
+        }
+    }
+
     void UpdateNetWorthDisplay()
     {
         if (textUI.totalNetWorthText == null) return;
@@ -276,14 +295,6 @@ public class CurrencyManager : MonoBehaviour
         }
     }
 
-    public void UpdateStatusDisplay(string message)
-    {
-        if (textUI.newsText != null) {textUI.newsText.text = message;}
-        string status = marketOpen ? "OPEN" : "CLOSED";
-        if (textUI.marketStatusText != null) {textUI.marketStatusText.text = $"Market Status: {status}";}
-        if (textUI.dayText != null) {textUI.dayText.text = $"Day: {currentDay}";}
-    }
-
     void UpdateBankUI()
     {
         // Safety Check: If we aren't looking at a bank, don't try to update it
@@ -301,6 +312,15 @@ public class CurrencyManager : MonoBehaviour
         UpdateNetWorthDisplay();
         UpdateClockMath();
         UpdateBankUI();
+        UpdateNewsDisplay();
+
+        if (textUI.marketStatusText != null) 
+        {
+            string status = marketOpen ? "OPEN" : "CLOSED";
+            textUI.marketStatusText.text = $"Market Status: {status}"; 
+        }
+
+        if (textUI.dayText != null) { textUI.dayText.text = $"Day: {currentDay}"; }
 
         // Reset Inputs (Clean slate for the new screen)
         if (buySlider != null) { buySlider.value = 0; OnBuySliderDrag(); }
@@ -311,25 +331,21 @@ public class CurrencyManager : MonoBehaviour
         {
             UpdateExchangeRate(currencyPanelID.currentExchangeRate);
         
-            // Update Title: "Euro: €500"
+            // Update Currency Balance
             if (textUI.currencyText != null)
             {
             textUI.currencyText.text = $"{currencyPanelID.currencyName}: {currencyPanelID.currencySymbol}{currencyPanelID.currencyBalance:F0}";
             }
-            // Update Symbol: "€"
+
+            // Update Currency Symbol
             if (textUI.sellSymbolLabel != null)
             {
             textUI.sellSymbolLabel.text = currencyPanelID.currencySymbol;
             }
+
             // Update Button Text
             if (buyButtonText != null) { buyButtonText.text = $"Buy {currencyPanelID.currencyName}"; }
             if (sellButtonText != null) { sellButtonText.text = $"Sell {currencyPanelID.currencyName}"; }
-        }
-        else
-        {
-            // We are on Map/Bank
-            if (textUI.currencyText != null) { textUI.currencyText.text = "Market Overview"; } // Or "Select a Market"
-            if (textUI.sellSymbolLabel != null) { textUI.sellSymbolLabel.text = ""; }
         }
 
         // 4. Bank Specifics
@@ -338,6 +354,7 @@ public class CurrencyManager : MonoBehaviour
             bankInterestRateText.text = $"Daily Interest Rate: {activeBankID.dailyInterestRate}%";
         }
     }
+
     // Slider and Input Field Functions
     public void OnBuySliderDrag() 
     {
